@@ -7,10 +7,12 @@ variables:
   terraformVersion: '1.7.0'
   azureServiceConnection: 'devops-connection'
   agentPool: 'epicbook-agent'
-  workingDir: '$(System.DefaultWorkingDirectory)' # Update this if your .tf files are in a subfolder
+  workingDir: '$(System.DefaultWorkingDirectory)'
+
+stages:
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STAGE 1 — TERRAFORM INIT
+# STAGE 1 — INIT
 # ─────────────────────────────────────────────────────────────────────────────
 - stage: TerraformInit
   displayName: 'Stage 1 — Terraform Init'
@@ -55,7 +57,7 @@ variables:
         ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STAGE 2 — TERRAFORM PLAN
+# STAGE 2 — PLAN
 # ─────────────────────────────────────────────────────────────────────────────
 - stage: TerraformPlan
   displayName: 'Stage 2 — Terraform Plan'
@@ -89,10 +91,9 @@ variables:
 
     - publish: $(workingDir)/tfplan
       artifact: tfplan
-      displayName: 'Publish Plan Artifact'
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STAGE 3 — TERRAFORM APPLY
+# STAGE 3 — APPLY
 # ─────────────────────────────────────────────────────────────────────────────
 - stage: TerraformApply
   displayName: 'Stage 3 — Terraform Apply'
@@ -103,9 +104,26 @@ variables:
       name: $(agentPool)
     steps:
     - checkout: self
-
     - download: current
       artifact: tfplan
+
+    - task: DownloadSecureFile@1
+      name: sshPrivateKey
+      inputs:
+        secureFile: 'id_rsa'
+
+    - task: DownloadSecureFile@1
+      name: sshPublicKey
+      inputs:
+        secureFile: 'id_rsa.pub'
+
+    - script: |
+        mkdir -p ~/.ssh
+        cp $(sshPrivateKey.secureFilePath) ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        cp $(sshPublicKey.secureFilePath) ~/.ssh/id_rsa.pub
+        chmod 644 ~/.ssh/id_rsa.pub
+      displayName: 'Install SSH Keys for VM Access'
 
     - script: |
         cd $(workingDir)
@@ -119,10 +137,10 @@ variables:
         ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STAGE 4 — PUBLISH OUTPUTS
+# STAGE 4 — OUTPUTS
 # ─────────────────────────────────────────────────────────────────────────────
 - stage: PublishOutputs
-  displayName: 'Stage 4 — Publish Terraform Outputs'
+  displayName: 'Stage 4 — Publish Outputs'
   dependsOn: TerraformApply
   jobs:
   - job: outputs
@@ -134,10 +152,10 @@ variables:
     - script: |
         cd $(workingDir)
         terraform init
-        VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
-        echo "##vso[task.setvariable variable=VM_PUBLIC_IP]$VM_PUBLIC_IP"
-        echo "VM Public IP is $VM_PUBLIC_IP"
-      displayName: 'Extract Outputs'
+        VM_IP=$(terraform output -raw vm_public_ip)
+        echo "##vso[task.setvariable variable=VM_PUBLIC_IP]$VM_IP"
+        echo "Success! VM is at: $VM_IP"
+      displayName: 'Extract VM IP'
       env:
         ARM_CLIENT_ID: $(ARM_CLIENT_ID)
         ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
