@@ -166,7 +166,7 @@ stages:
 # STAGE 4 — OUTPUTS
 # ─────────────────────────────────────────────────────────────────────────────
 - stage: PublishOutputs
-  displayName: 'Stage 4 — Publish Outputs'
+  displayName: 'Stage 4 — Publish Infrastructure Outputs'
   dependsOn: TerraformApply
   jobs:
   - job: outputs
@@ -175,6 +175,7 @@ stages:
     steps:
     - checkout: self
 
+    # 1. Standard credential extraction (Required to talk to the state file)
     - task: AzureCLI@2
       name: extractCreds
       inputs:
@@ -188,13 +189,28 @@ stages:
           echo "##vso[task.setvariable variable=ARM_TENANT_ID]$tenantId"
           echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$(az account show --query id -o tsv)"
 
+    # 2. Extract and Log Outputs
     - script: |
         cd $(workingDir)
-        terraform init
+        terraform init # Required to access the backend state
+        
+        # Capture outputs from Terraform
         VM_IP=$(terraform output -raw vm_public_ip)
-        echo "##vso[task.setvariable variable=VM_PUBLIC_IP]$VM_IP"
-        echo "Deployment successful. IP: $VM_IP"
-      displayName: 'Final Output'
+        DB_FQDN=$(terraform output -raw mysql_fqdn)
+
+        # Set them as Pipeline Variables for use in other tasks
+        echo "##vso[task.setvariable variable=VM_PUBLIC_IP;isOutput=true]$VM_IP"
+        echo "##vso[task.setvariable variable=MYSQL_FQDN;isOutput=true]$DB_FQDN"
+
+        # Print to the console for easy manual copying
+        echo "========================================================="
+        echo "INFRASTRUCTURE DEPLOYMENT COMPLETE"
+        echo "========================================================="
+        echo "Web VM Public IP: $VM_IP"
+        echo "MySQL Server FQDN: $DB_FQDN"
+        echo "========================================================="
+      displayName: 'Extract and Output IP and FQDN'
+      name: infraData
       env:
         ARM_CLIENT_ID: $(ARM_CLIENT_ID)
         ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
