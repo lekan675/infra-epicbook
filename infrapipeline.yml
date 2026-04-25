@@ -7,7 +7,8 @@ variables:
   terraformVersion:      '1.7.0'
   azureServiceConnection: 'devops-connection'      # your Azure RM service connection name
   agentPool:             'epicbook-agent'          # your agent pool name
-  
+  workingDir:            '$(System.DefaultWorkingDirectory)/terraform'
+
 
 stages:
 
@@ -60,10 +61,13 @@ stages:
           echo "##vso[task.setvariable variable=ARM_TENANT_ID]$tenantId"
           echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$(az account show --query id -o tsv)"
 
-    - task: TerraformInstaller@1
+    - script: |
+        TERRAFORM_VERSION=$(terraformVersion)
+        wget -q https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+        unzip -o terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+        sudo mv terraform /usr/local/bin/terraform
+        terraform --version
       displayName: 'Install Terraform $(terraformVersion)'
-      inputs:
-        terraformVersion: $(terraformVersion)
 
     - script: |
         cd $(workingDir)
@@ -111,10 +115,13 @@ stages:
           echo "##vso[task.setvariable variable=ARM_TENANT_ID]$tenantId"
           echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$(az account show --query id -o tsv)"
 
-    - task: TerraformInstaller@1
+    - script: |
+        TERRAFORM_VERSION=$(terraformVersion)
+        wget -q https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+        unzip -o terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+        sudo mv terraform /usr/local/bin/terraform
+        terraform --version
       displayName: 'Install Terraform $(terraformVersion)'
-      inputs:
-        terraformVersion: $(terraformVersion)
 
     - script: |
         cd $(workingDir)
@@ -194,10 +201,13 @@ stages:
           echo "##vso[task.setvariable variable=ARM_TENANT_ID]$tenantId"
           echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$(az account show --query id -o tsv)"
 
-    - task: TerraformInstaller@1
+    - script: |
+        TERRAFORM_VERSION=$(terraformVersion)
+        wget -q https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+        unzip -o terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+        sudo mv terraform /usr/local/bin/terraform
+        terraform --version
       displayName: 'Install Terraform $(terraformVersion)'
-      inputs:
-        terraformVersion: $(terraformVersion)
 
     - download: current
       artifact: tfplan
@@ -257,10 +267,13 @@ stages:
           echo "##vso[task.setvariable variable=ARM_TENANT_ID]$tenantId"
           echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$(az account show --query id -o tsv)"
 
-    - task: TerraformInstaller@1
+    - script: |
+        TERRAFORM_VERSION=$(terraformVersion)
+        wget -q https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+        unzip -o terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+        sudo mv terraform /usr/local/bin/terraform
+        terraform --version
       displayName: 'Install Terraform $(terraformVersion)'
-      inputs:
-        terraformVersion: $(terraformVersion)
 
     - script: |
         cd $(workingDir)
