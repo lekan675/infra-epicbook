@@ -92,7 +92,6 @@ stages:
         terraform init
         terraform plan \
           -var="public_key=$(sshPublicKey.secureFilePath)" \
-          -var="db_admin_password=$(DB_ADMIN_PASSWORD)" \
           -out=tfplan
       displayName: 'Terraform Plan'
       env:
@@ -100,8 +99,6 @@ stages:
         ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
         ARM_TENANT_ID: $(ARM_TENANT_ID)
         ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
-        DB_ADMIN_PASSWORD: $(DB_ADMIN_PASSWORD)
-
     - publish: $(workingDir)/tfplan
       artifact: tfplan
 
