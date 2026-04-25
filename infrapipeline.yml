@@ -9,7 +9,13 @@ variables:
   agentPool:             'epicbook-agent'          # your agent pool name
   workingDir:            '$(System.DefaultWorkingDirectory)/terraform'
 
-
+resources:
+  repositories:
+    - repository: infraRepo
+      type: github
+      name: lekan675/infra-epicbook.git  # ← change this
+      ref: refs/heads/main
+         
 stages:
 
 # ─────────────────────────────────────────────────────────────────────────────
