@@ -63,3 +63,9 @@ variable "db_name" {
   type        = string
   default     = "appdb"
 }
+
+variable "db_admin_password" {
+  description = "Database administrator password"
+  type        = string
+  sensitive   = true
+}
