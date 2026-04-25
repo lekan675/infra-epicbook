@@ -1,0 +1,9 @@
+application_name              = "myapp"
+location                      = "South Africa North"
+vnet_address_space            = ["10.0.0.0/16"]
+public_subnet_address_prefix  = ["10.0.1.0/24"]
+private_subnet_address_prefix = ["10.0.2.0/24"]
+admin_username                = "azureuser"
+vm_size                       = "Standard_B2ms"
+db_admin_username             = "dbadmin"
+db_name                       = "appdb"
