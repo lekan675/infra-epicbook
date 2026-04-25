@@ -7,10 +7,11 @@ variables:
   terraformVersion: '1.7.0'
   azureServiceConnection: 'devops-connection'
   agentPool: 'epicbook-agent'
-  # Set this to '.' if your .tf files are in the root, or 'terraform' if in a folder
-  workingDir: '$(System.DefaultWorkingDirectory)' 
+  workingDir: '$(System.DefaultWorkingDirectory)' # Update this if your .tf files are in a subfolder
 
-stages:
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 1 — TERRAFORM INIT
+# ─────────────────────────────────────────────────────────────────────────────
 - stage: TerraformInit
   displayName: 'Stage 1 — Terraform Init'
   jobs:
@@ -20,32 +21,15 @@ stages:
     steps:
     - checkout: self
 
-    # 1. Install Dependencies (Unzip and Azure CLI)
     - script: |
-        sudo apt-get update
-        sudo apt-get install -y unzip curl
+        sudo apt-get update && sudo apt-get install -y unzip curl
         if ! command -v az &> /dev/null; then
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
         fi
-      displayName: 'Install System Dependencies'
-
-    - task: DownloadSecureFile@1
-      name: sshPrivateKey
-      inputs:
-        secureFile: 'id_rsa'
-
-    - task: DownloadSecureFile@1
-      name: sshPublicKey
-      inputs:
-        secureFile: 'id_rsa.pub'
-
-    - script: |
-        mkdir -p ~/.ssh
-        cp $(sshPrivateKey.secureFilePath) ~/.ssh/id_rsa
-        chmod 600 ~/.ssh/id_rsa
-        cp $(sshPublicKey.secureFilePath) ~/.ssh/id_rsa.pub
-        chmod 644 ~/.ssh/id_rsa.pub
-      displayName: 'Install SSH Keys'
+        wget -q https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
+        unzip -o terraform_$(terraformVersion)_linux_amd64.zip
+        sudo mv terraform /usr/local/bin/terraform
+      displayName: 'Install Dependencies & Terraform'
 
     - task: AzureCLI@2
       name: extractCreds
@@ -61,12 +45,6 @@ stages:
           echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$(az account show --query id -o tsv)"
 
     - script: |
-        wget -q https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip
-        unzip -o terraform_$(terraformVersion)_linux_amd64.zip
-        sudo mv terraform /usr/local/bin/terraform
-      displayName: 'Install Terraform'
-
-    - script: |
         cd $(workingDir)
         terraform init
       displayName: 'Terraform Init'
@@ -76,6 +54,9 @@ stages:
         ARM_TENANT_ID: $(ARM_TENANT_ID)
         ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 2 — TERRAFORM PLAN
+# ─────────────────────────────────────────────────────────────────────────────
 - stage: TerraformPlan
   displayName: 'Stage 2 — Terraform Plan'
   dependsOn: TerraformInit
@@ -85,7 +66,7 @@ stages:
       name: $(agentPool)
     steps:
     - checkout: self
-    
+
     - task: DownloadSecureFile@1
       name: sshPublicKey
       inputs:
@@ -93,6 +74,7 @@ stages:
 
     - script: |
         cd $(workingDir)
+        terraform init
         terraform plan \
           -var="public_key=$(sshPublicKey.secureFilePath)" \
           -var="db_admin_password=$(DB_ADMIN_PASSWORD)" \
@@ -107,3 +89,57 @@ stages:
 
     - publish: $(workingDir)/tfplan
       artifact: tfplan
+      displayName: 'Publish Plan Artifact'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 3 — TERRAFORM APPLY
+# ─────────────────────────────────────────────────────────────────────────────
+- stage: TerraformApply
+  displayName: 'Stage 3 — Terraform Apply'
+  dependsOn: TerraformPlan
+  jobs:
+  - job: apply
+    pool:
+      name: $(agentPool)
+    steps:
+    - checkout: self
+
+    - download: current
+      artifact: tfplan
+
+    - script: |
+        cd $(workingDir)
+        terraform init
+        terraform apply -auto-approve $(Pipeline.Workspace)/tfplan/tfplan
+      displayName: 'Terraform Apply'
+      env:
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 4 — PUBLISH OUTPUTS
+# ─────────────────────────────────────────────────────────────────────────────
+- stage: PublishOutputs
+  displayName: 'Stage 4 — Publish Terraform Outputs'
+  dependsOn: TerraformApply
+  jobs:
+  - job: outputs
+    pool:
+      name: $(agentPool)
+    steps:
+    - checkout: self
+
+    - script: |
+        cd $(workingDir)
+        terraform init
+        VM_PUBLIC_IP=$(terraform output -raw vm_public_ip)
+        echo "##vso[task.setvariable variable=VM_PUBLIC_IP]$VM_PUBLIC_IP"
+        echo "VM Public IP is $VM_PUBLIC_IP"
+      displayName: 'Extract Outputs'
+      env:
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
