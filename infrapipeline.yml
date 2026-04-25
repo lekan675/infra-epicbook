@@ -12,7 +12,7 @@ variables:
 stages:
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STAGE 1 — INIT
+# STAGE 1 — INITIALIZE ENVIRONMENT
 # ─────────────────────────────────────────────────────────────────────────────
 - stage: TerraformInit
   displayName: 'Stage 1 — Terraform Init'
@@ -57,7 +57,7 @@ stages:
         ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STAGE 2 — PLAN
+# STAGE 2 — GENERATE PLAN
 # ─────────────────────────────────────────────────────────────────────────────
 - stage: TerraformPlan
   displayName: 'Stage 2 — Terraform Plan'
@@ -68,6 +68,19 @@ stages:
       name: $(agentPool)
     steps:
     - checkout: self
+
+    - task: AzureCLI@2
+      name: extractCreds
+      inputs:
+        azureSubscription: $(azureServiceConnection)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        addSpnToEnvironment: true
+        inlineScript: |
+          echo "##vso[task.setvariable variable=ARM_CLIENT_ID]$servicePrincipalId"
+          echo "##vso[task.setvariable variable=ARM_CLIENT_SECRET;isSecret=true]$servicePrincipalKey"
+          echo "##vso[task.setvariable variable=ARM_TENANT_ID]$tenantId"
+          echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$(az account show --query id -o tsv)"
 
     - task: DownloadSecureFile@1
       name: sshPublicKey
@@ -93,7 +106,7 @@ stages:
       artifact: tfplan
 
 # ─────────────────────────────────────────────────────────────────────────────
-# STAGE 3 — APPLY
+# STAGE 3 — APPLY CHANGES
 # ─────────────────────────────────────────────────────────────────────────────
 - stage: TerraformApply
   displayName: 'Stage 3 — Terraform Apply'
@@ -106,6 +119,19 @@ stages:
     - checkout: self
     - download: current
       artifact: tfplan
+
+    - task: AzureCLI@2
+      name: extractCreds
+      inputs:
+        azureSubscription: $(azureServiceConnection)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        addSpnToEnvironment: true
+        inlineScript: |
+          echo "##vso[task.setvariable variable=ARM_CLIENT_ID]$servicePrincipalId"
+          echo "##vso[task.setvariable variable=ARM_CLIENT_SECRET;isSecret=true]$servicePrincipalKey"
+          echo "##vso[task.setvariable variable=ARM_TENANT_ID]$tenantId"
+          echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$(az account show --query id -o tsv)"
 
     - task: DownloadSecureFile@1
       name: sshPrivateKey
@@ -123,7 +149,7 @@ stages:
         chmod 600 ~/.ssh/id_rsa
         cp $(sshPublicKey.secureFilePath) ~/.ssh/id_rsa.pub
         chmod 644 ~/.ssh/id_rsa.pub
-      displayName: 'Install SSH Keys for VM Access'
+      displayName: 'Install SSH Keys'
 
     - script: |
         cd $(workingDir)
@@ -149,13 +175,26 @@ stages:
     steps:
     - checkout: self
 
+    - task: AzureCLI@2
+      name: extractCreds
+      inputs:
+        azureSubscription: $(azureServiceConnection)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        addSpnToEnvironment: true
+        inlineScript: |
+          echo "##vso[task.setvariable variable=ARM_CLIENT_ID]$servicePrincipalId"
+          echo "##vso[task.setvariable variable=ARM_CLIENT_SECRET;isSecret=true]$servicePrincipalKey"
+          echo "##vso[task.setvariable variable=ARM_TENANT_ID]$tenantId"
+          echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID]$(az account show --query id -o tsv)"
+
     - script: |
         cd $(workingDir)
         terraform init
         VM_IP=$(terraform output -raw vm_public_ip)
         echo "##vso[task.setvariable variable=VM_PUBLIC_IP]$VM_IP"
-        echo "Success! VM is at: $VM_IP"
-      displayName: 'Extract VM IP'
+        echo "Deployment successful. IP: $VM_IP"
+      displayName: 'Final Output'
       env:
         ARM_CLIENT_ID: $(ARM_CLIENT_ID)
         ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
