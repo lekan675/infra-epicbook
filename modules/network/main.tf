@@ -1,4 +1,4 @@
-# ─── Virtual Network (AWS VPC equivalent) ─────────────────────────────────
+# ─── Virtual Network ───────────────────────────────────────────────────────────
 resource "azurerm_virtual_network" "vnet" {
   name                = "${var.application_name}-vnet"
   address_space       = var.vnet_address_space
@@ -6,7 +6,7 @@ resource "azurerm_virtual_network" "vnet" {
   resource_group_name = var.resource_group_name
 }
 
-# ─── Public Subnet (hosts the VM — AWS public subnet equivalent) ───────────
+# ─── Public Subnet — hosts the VM ─────────────────────────────────────────────
 resource "azurerm_subnet" "public" {
   name                 = "${var.application_name}-public-subnet"
   resource_group_name  = var.resource_group_name
@@ -14,14 +14,14 @@ resource "azurerm_subnet" "public" {
   address_prefixes     = var.public_subnet_address_prefix
 }
 
-# ─── Private Subnet (hosts MySQL — AWS RDS private subnet equivalent) ──────
+# ─── Private Subnet — delegated to MySQL Flexible Server ──────────────────────
+# The delegation allows Azure to inject the MySQL service into this subnet
 resource "azurerm_subnet" "private" {
   name                 = "${var.application_name}-private-subnet"
   resource_group_name  = var.resource_group_name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = var.private_subnet_address_prefix
 
-  # Delegated to MySQL Flexible Server (required for PaaS MySQL in a subnet)
   delegation {
     name = "mysql-delegation"
     service_delegation {
@@ -31,14 +31,12 @@ resource "azurerm_subnet" "private" {
   }
 }
 
-# ─── NSG for EC2/VM (allows SSH 22 and HTTP 80 from internet) ─────────────
-# Equivalent to AWS Security Group for EC2
+# ─── NSG for VM — allows SSH (22) and HTTP (80) from internet ─────────────────
 resource "azurerm_network_security_group" "ec2_nsg" {
   name                = "${var.application_name}-ec2-nsg"
   location            = var.location
   resource_group_name = var.resource_group_name
 
-  # Allow SSH — port 22
   security_rule {
     name                       = "allow-ssh"
     priority                   = 100
@@ -51,7 +49,6 @@ resource "azurerm_network_security_group" "ec2_nsg" {
     destination_address_prefix = "*"
   }
 
-  # Allow HTTP — port 80
   security_rule {
     name                       = "allow-http"
     priority                   = 110
@@ -70,15 +67,18 @@ resource "azurerm_subnet_network_security_group_association" "ec2_nsg_assoc" {
   network_security_group_id = azurerm_network_security_group.ec2_nsg.id
 }
 
-# ─── NSG for RDS/MySQL (allows 3306 from EC2/VM subnet only) ──────────────
-# Equivalent to AWS Security Group for RDS — source is the public subnet CIDR
-resource "azurerm_network_security_group" "rds_nsg" {
-  name                = "${var.application_name}-rds-nsg"
+# ─── NSG for MySQL subnet ──────────────────────────────────────────────────────
+# GRANTS VM ACCESS: allows port 3306 inbound from the VM's subnet only
+# The VM (10.0.1.x) can reach MySQL (10.0.2.x) on port 3306
+# All other inbound traffic is denied — MySQL is never reachable from the internet
+resource "azurerm_network_security_group" "mysql_nsg" {
+  name                = "${var.application_name}-mysql-nsg"
   location            = var.location
   resource_group_name = var.resource_group_name
 
+  # Allow MySQL port from the VM subnet (10.0.1.0/24) only
   security_rule {
-    name                       = "allow-mysql-from-ec2"
+    name                       = "allow-mysql-from-vm-subnet"
     priority                   = 100
     direction                  = "Inbound"
     access                     = "Allow"
@@ -89,6 +89,7 @@ resource "azurerm_network_security_group" "rds_nsg" {
     destination_address_prefix = "*"
   }
 
+  # Deny everything else — no public internet access to MySQL
   security_rule {
     name                       = "deny-all-other-inbound"
     priority                   = 200
@@ -102,18 +103,21 @@ resource "azurerm_network_security_group" "rds_nsg" {
   }
 }
 
-resource "azurerm_subnet_network_security_group_association" "rds_nsg_assoc" {
+resource "azurerm_subnet_network_security_group_association" "mysql_nsg_assoc" {
   subnet_id                 = azurerm_subnet.private.id
-  network_security_group_id = azurerm_network_security_group.rds_nsg.id
+  network_security_group_id = azurerm_network_security_group.mysql_nsg.id
 }
 
-# ─── Private DNS Zone for MySQL Flexible Server ────────────────────────────
-# Required so the VM can resolve the MySQL FQDN inside the VNet
+# ─── Private DNS Zone ──────────────────────────────────────────────────────────
+# Resolves the MySQL FQDN to a private IP address inside the VNet
+# Without this the VM cannot resolve the MySQL hostname
 resource "azurerm_private_dns_zone" "mysql_dns" {
   name                = "${var.application_name}.mysql.database.azure.com"
   resource_group_name = var.resource_group_name
 }
 
+# ─── VNet Link — connects the DNS zone to the VNet ────────────────────────────
+# Without this link the VM's DNS queries for the MySQL FQDN will fail
 resource "azurerm_private_dns_zone_virtual_network_link" "mysql_dns_link" {
   name                  = "${var.application_name}-mysql-dns-link"
   private_dns_zone_name = azurerm_private_dns_zone.mysql_dns.name
