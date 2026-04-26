@@ -9,13 +9,13 @@ output "private_subnet_id" {
 }
 
 output "ec2_nsg_id" {
-  description = "ID of the EC2/VM Network Security Group"
+  description = "ID of the VM Network Security Group"
   value       = azurerm_network_security_group.ec2_nsg.id
 }
 
-output "rds_nsg_id" {
-  description = "ID of the RDS/MySQL Network Security Group"
-  value       = azurerm_network_security_group.rds_nsg.id
+output "mysql_nsg_id" {
+  description = "ID of the MySQL Network Security Group"
+  value       = azurerm_network_security_group.mysql_nsg.id
 }
 
 output "mysql_private_dns_zone_id" {
@@ -23,8 +23,7 @@ output "mysql_private_dns_zone_id" {
   value       = azurerm_private_dns_zone.mysql_dns.id
 }
 
-# ── NEW: export the VNet link ID so database module can depend on it ───────
 output "mysql_dns_vnet_link_id" {
-  description = "ID of the private DNS zone VNet link — MySQL server must wait for this"
+  description = "ID of the DNS zone VNet link — MySQL server must wait for this"
   value       = azurerm_private_dns_zone_virtual_network_link.mysql_dns_link.id
 }
