@@ -24,9 +24,9 @@ output "mysql_username" {
 }
 
 output "db_password" {
-  description = "Auto-generated MySQL password — add this to your pipeline variable group as db_password"
+  description = "Auto-generated MySQL password — copy into pipeline variable group as db_password"
   value       = module.database.db_password
-  sensitive   = false
+  sensitive   = true
 }
 
 output "ssh_command" {
@@ -36,5 +36,6 @@ output "ssh_command" {
 
 output "mysql_connect_from_vm" {
   description = "MySQL connect command to run from inside the VM"
-  value       = "mysql -h ${module.database.mysql_fqdn} -P 3306 -u ${var.db_admin_username}@${module.database.mysql_server_name} -p${module.database.db_password}"
+  value       = "mysql -h ${module.database.mysql_fqdn} -P 3306 -u ${var.db_admin_username}@${module.database.mysql_server_name} -p<your_password>"
+  sensitive   = false
 }
